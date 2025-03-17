@@ -427,8 +427,27 @@ function procesarFilas(hojaActiva, hojaCertificacion, hojaFormulario, hojaProxim
     // Lógica para procesar montos
     if (hayRetroactivos) {
       // Si hay retroactivos, evaluar bajas y limitaciones
+      if (columnaK.includes('baja') && columnaK.includes('limitacion' || 'limitación')) {
+        const fechaBajaOLimitacion = columnaK.replace(/(?!\d{2}\/\d{2}\/\d{4})./g, "")
+        const fechasRetroactivas = separarFechasPeriodo(periodoRetroactivo)
+        let fechaMayor = determinarFechaMayor(fechaBajaOLimitacion, fechasRetroactivas.inicio)
+        if (fechaBajaOLimitacion == fechaMayor) {
+          fechaMayor = determinarFechaMayor(fechaBajaOLimitacion, fechasRetroactivas.fin)
+          if (fechaBajaOLimitacion == fechaMayor) {
+            const fechasNoRetroactivas = separarFechasPeriodo(periodoNoRetroactivo)
 
-      ({ fila: filaDatos, totalIomaPersonal, totalIomaPatronal, totalImporteALiquidar } = procesarMonto(filaDatos, row, hojaFormulario, hayRetroactivos, periodoRetroactivo, periodoNoRetroactivo, periodoLiquidacionParticular, totalIomaPersonal, totalIomaPatronal, totalImporteALiquidar));
+
+
+
+          } else {// aca debemos crear el periodo para el periodoLiquidacionParticular con fechaRetroactivas.inicio al fechaBajaOLimitacion 
+
+          }
+        } else {// Aca no se procesa direcctamente esta persona
+        }
+
+      } else {
+        ({ fila: filaDatos, totalIomaPersonal, totalIomaPatronal, totalImporteALiquidar } = procesarMonto(filaDatos, row, hojaFormulario, hayRetroactivos, periodoRetroactivo, periodoNoRetroactivo, periodoLiquidacionParticular, totalIomaPersonal, totalIomaPatronal, totalImporteALiquidar));
+      }
       hojaActiva.appendRow(filaDatos);
     } else {
       // Si no hay retroactivos, excluir bajas y limitaciones
@@ -485,7 +504,7 @@ function calcularRetroactivoCompleto(filaCertificacion, dato, diferencia, hojaFo
   let montoMensual = 0;
   let montoTotal = 0;
   let detallesCalculo = "";
-  let resultado = fechaMayor(dato, filaCertificacion[3]);
+  let resultado = determinarFechaMayor(dato, filaCertificacion[3]);
   const mesRetroactivo = obtenerMesesEntreFechas(resultado, fecha.inicio);
 
   mesRetroactivo.forEach(mesR => {
@@ -704,20 +723,18 @@ function convertirFecha(fechaTexto) {
   return new Date(fechaTexto);
 }
 
+function determinarFechaMayor(fecha1, fecha2) {
+  let date1 = new Date(fecha1);
+  let date2 = new Date(fecha2);
 
+  if (isNaN(date2.getTime())) {
+    const [dia2, mes2, año2] = fecha2.split('/').map(Number);
+    date2 = new Date(año2, mes2 - 1, dia2);
+  }
 
-// function fechaMayor(fecha1, fecha2) {
-//   let date1 = new Date(fecha1);
-//   let date2 = new Date(fecha2);
+  if (isNaN(date1.getTime()) || isNaN(date2.getTime())) {
+    throw new Error("Una o ambas fechas no son válidas.");
+  }
 
-//   if (isNaN(date2.getTime())) {
-//     const [dia2, mes2, año2] = fecha2.split('/').map(Number);
-//     date2 = new Date(año2, mes2 - 1, dia2);
-//   }
-
-//   if (isNaN(date1.getTime()) || isNaN(date2.getTime())) {
-//     throw new Error("Una o ambas fechas no son válidas.");
-//   }
-
-//   return date1 >= date2 ? fecha1 : fecha2;
-// }
+  return date1 >= date2 ? fecha1 : fecha2;
+}
