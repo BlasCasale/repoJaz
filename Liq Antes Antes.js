@@ -1,0 +1,612 @@
+// function procesarLiquidaciones() {
+//   Logger.log("Iniciando procesarLiquidaciones...");
+  
+//   const ss = SpreadsheetApp.getActiveSpreadsheet();
+//   const hojaActiva = ss.getActiveSheet();
+//   const hojasValidas = ["Liquidación Fortalecimiento", "Liquidación Autonomia Joven", "Liquidación Operadores de Calle"];
+
+//   Logger.log("Hoja activa: " + hojaActiva.getName());
+
+//   if (hojasValidas.includes(hojaActiva.getName())) {
+//     const hojaFormulario = ss.getSheetByName("Formulario");
+//     const hojaProximosVencimientos = ss.getSheetByName('Proximos Vencimientos');
+//     const hojaVencimientosbaja = ss.getSheetByName('Vencimientos baja');
+//     const titulo = hojaActiva.getRange("A1").getValue().trim().toLowerCase();
+//     const programa = identificarPrograma(titulo);
+
+//     Logger.log("Programa identificado: " + programa);
+
+//     const hojaPrograma = ss.getSheetByName("Certificación " + programa);
+//     const hojaIoma = ss.getSheetByName("IOMA " + programa);
+//     const periodo = hojaIoma.getRange("A4").getValue().trim().toLowerCase();
+
+//     Logger.log("Periodo obtenido: " + periodo);
+
+//     const ui = SpreadsheetApp.getUi();
+//     const confirmarPeriodo = ui.alert("El periodo a liquidar es: " + periodo, ui.ButtonSet.OK_CANCEL);
+
+//     if (confirmarPeriodo == ui.Button.CANCEL) {
+//       ui.alert("Asegúrese de modificar los periodos en la hoja Certificación antes de realizar la liquidación.");
+//       Logger.log("Proceso cancelado por el usuario.");
+//       return;
+//     }
+
+//     const hayRetroactivos = ui.alert("¿Hay retroactivos a calcular?", ui.ButtonSet.YES_NO);
+//     let fechaRetroactiva = null;
+
+//     if (hayRetroactivos == ui.Button.YES) {
+//       const respuesta = ui.prompt("¿Hasta qué mes? Inclusive (Formato: aaaa-mm)").getResponseText();
+//       if (!/^\d{4}-\d{2}$/.test(respuesta)) {
+//         ui.alert("La entrada no es válida. Por favor, ingrese en el formato aaaa-mm.");
+//         Logger.log("Entrada de fecha retroactiva no válida: " + respuesta);
+//         return;
+//       }
+//       const [year, month] = respuesta.split('-').map(Number);
+//       fechaRetroactiva = new Date(year, month - 1, 1);
+
+//       Logger.log("Fecha retroactiva: " + fechaRetroactiva);
+//     }
+
+//     limpiarYConfigurarColumnas(hojaActiva, hojaPrograma, hayRetroactivos, fechaRetroactiva, periodo, hojaFormulario);
+
+//     const {totalColumna5o8, totalColumna6o9, totalColumna7o10} = procesarFilas(
+//       hojaActiva, hojaPrograma, hayRetroactivos, hojaFormulario,
+//       hojaProximosVencimientos, hojaVencimientosbaja, programa,
+//       fechaRetroactiva
+//     );
+
+//     Logger.log("Totales procesados: ", { totalColumna5o8, totalColumna6o9, totalColumna7o10 });
+
+//     copiarFormatos(hojaActiva);
+//     agregarFilaTotales(hojaActiva, totalColumna5o8, totalColumna6o9, totalColumna7o10, hayRetroactivos);
+//     agregarDatosIoma(ss, programa, totalColumna5o8, totalColumna6o9, totalColumna7o10);
+
+//   } else {
+//     Logger.log("No puede ejecutarse la función, ya que no es una hoja válida.");
+//   }
+// }
+
+// function limpiarYConfigurarColumnas(hojaActiva, hojaPrograma, hayRetroactivos, fechaRetroactiva, periodo, hojaFormulario) {
+//   Logger.log("Iniciando limpiarYConfigurarColumnas...");
+//   Logger.log("Periodo recibido: " + periodo);
+//   Logger.log("Hay retroactivos: " + hayRetroactivos);
+//   Logger.log("Fecha retroactiva: " + fechaRetroactiva);
+  
+//   hojaActiva.getRange("E3:Z3").clearContent();
+
+//   const fechasPeriodo = periodo.split(' al ');
+//   Logger.log("Fechas del periodo separadas: " + JSON.stringify(fechasPeriodo));
+  
+//   const fechaInicioPeriodo = parseFecha(fechasPeriodo[0].trim());
+//   const fechaFinPeriodo = hayRetroactivos ? fechaRetroactiva : parseFecha(fechasPeriodo[1].trim());
+
+//   Logger.log("Fecha de inicio del periodo: " + fechaInicioPeriodo);
+//   Logger.log("Fecha de fin del periodo: " + fechaFinPeriodo);
+
+//   const mesesPeriodo = obtenerMesesEntreFechas(fechaInicioPeriodo, fechaFinPeriodo);
+
+//   Logger.log("Meses del periodo: " + JSON.stringify(mesesPeriodo));
+
+//   if (hayRetroactivos) {
+//     mesesPeriodo.forEach((mes, index) => {
+//       const colIndex = 5 + index * 2;
+//       const resolucion = obtenerResolucion(mes.nombre, hojaFormulario);
+//       if (resolucion) {
+//         hojaActiva.insertColumnBefore(colIndex);
+//         hojaActiva.getRange(3, colIndex).setValue(`Monto Actualizado (${mes.nombre}) por (${resolucion})`);
+//         hojaActiva.insertColumnBefore(colIndex + 1);
+//         hojaActiva.getRange(3, colIndex + 1).setValue(`Diferencia Monto (${mes.nombre})`);
+//       }
+//       Logger.log(`Configuración de columnas para el mes ${mes.nombre}: `, { colIndex, resolucion });
+//     });
+//   } else {
+//     hojaActiva.getRange("E3").setValue("Monto");
+//     Logger.log("Configuración de columnas sin retroactivos.");
+//   }
+
+//   hojaActiva.insertColumnBefore(hojaActiva.getLastColumn() + 1);
+//   hojaActiva.getRange(3, hojaActiva.getLastColumn()).setValue("Total");
+// }
+
+// function parseFecha(fechaStr) {
+//   Logger.log("Parseando fecha: " + fechaStr);
+//   const partes = fechaStr.split('/');
+//   const fecha = new Date(partes[2], partes[1] - 1, partes[0]);
+//   Logger.log("Fecha parseada: " + fecha);
+//   return fecha;
+// }
+
+
+
+// function obtenerResolucion(mes, hojaFormulario) {
+//   Logger.log("Obteniendo resolución para el mes: " + mes);
+  
+//   const meses = hojaFormulario.getRange("H3:O3").getValues()[0];
+//   const resoluciones = hojaFormulario.getRange("H9:O9").getValues()[0];
+//   for (let i = 0; i < meses.length; i++) {
+//     if (meses[i].toLowerCase() === mes.toLowerCase()) {
+//       Logger.log("Resolución encontrada: " + resoluciones[i]);
+//       return resoluciones[i];
+//     }
+//   }
+//   Logger.log("No se encontró resolución para el mes: " + mes);
+//   return null;
+// }
+
+// function procesarFilas(hojaActiva, hojaPrograma, hayRetroactivos, hojaFormulario, hojaProximosVencimientos, hojaVencimientosbaja, programa, fechaRetroactiva) {
+//   Logger.log("Iniciando procesarFilas...");
+//   const data = hojaPrograma.getDataRange().getValues();
+//   const currentDate = new Date();
+//   let totalColumna5o8 = 0;
+//   let totalColumna6o9 = 0;
+//   let totalColumna7o10 = 0;
+//   let idsProximosVencimientos = new Set();
+//   let idsVencimientosBaja = new Set();
+//   const dataProximosVencimientos = hojaProximosVencimientos.getDataRange().getValues();
+//   const dataVencimientosBaja = hojaVencimientosbaja.getDataRange().getValues();
+
+//   Logger.log("Datos de proximos vencimientos y vencimientos baja cargados.");
+
+//   dataProximosVencimientos.forEach(row => {
+//     const idUnicoPersona = row[1] + "-" + row[2];
+//     idsProximosVencimientos.add(idUnicoPersona);
+//   });
+
+//   dataVencimientosBaja.forEach(row => {
+//     const idUnicoPersona = row[1] + "-" + row[2];
+//     idsVencimientosBaja.add(idUnicoPersona);
+//   });
+
+//   data.slice(3).forEach((row, i) => {
+//     const columnaK = row[10].toString().toLowerCase();
+//     const fechaColumnaD = new Date(row[3]);
+//     const diferenciaMeses = (currentDate.getFullYear() - fechaColumnaD.getFullYear()) * 12 + (currentDate.getMonth() - fechaColumnaD.getMonth());
+//     let filaDatos = [row[0], row[1], row[2], row[3]];
+//     const idUnicoPersona = row[1] + "-" + row[2];
+
+//     Logger.log(`Procesando fila ${i + 4}: `, { columnaK, fechaColumnaD, diferenciaMeses, idUnicoPersona });
+
+//     if (columnaK.includes('baja')) {
+//       if (diferenciaMeses === 11 && !idsVencimientosBaja.has(idUnicoPersona)) {
+//         agregarFilaAVencimientos(hojaVencimientosbaja, filaDatos, row, programa, idUnicoPersona, idsVencimientosBaja);
+//       } else if (diferenciaMeses !== 11 && idsVencimientosBaja.has(idUnicoPersona)) {
+//         eliminarFila(hojaVencimientosbaja, idUnicoPersona);
+//       }
+//     } else {
+//       if (diferenciaMeses === 11 && !idsProximosVencimientos.has(idUnicoPersona)) {
+//         agregarFilaAVencimientos(hojaProximosVencimientos, filaDatos, row, programa, idUnicoPersona, idsProximosVencimientos);
+//       } else if (diferenciaMeses !== 11 && idsProximosVencimientos.has(idUnicoPersona)) {
+//         eliminarFila(hojaProximosVencimientos, idUnicoPersona);
+//       }
+
+//       ({ fila: filaDatos, totalColumna5o8, totalColumna6o9, totalColumna7o10 } = procesarMonto(
+//         filaDatos, row, hojaFormulario, hayRetroactivos, fechaRetroactiva, 
+//         totalColumna5o8, totalColumna6o9, totalColumna7o10, hojaActiva
+//       ));
+      
+//       hojaActiva.appendRow(filaDatos);
+//     }
+//   });
+
+//   return { totalColumna5o8, totalColumna6o9, totalColumna7o10 };
+// }
+
+// function procesarMonto(filaHojaLiquidacion, row, hojaFormulario, hayRetroactivos, fechaRetroactiva, totalColumna5o8, totalColumna6o9, totalColumna7o10, hojaActiva) {
+//   let montoALiquidar;
+//   const tipoBeca = row[4];
+//   const fechaInicioPeriodo = new Date(row[3]);
+//   const fechaFinPeriodo = fechaRetroactiva || new Date(row[3]);
+//   const mesesPeriodo = obtenerMesesEntreFechas(fechaInicioPeriodo, fechaFinPeriodo);
+
+//   if (!hayRetroactivos) {
+//     montoALiquidar = calcularMontoSinRetroactivo(row, hojaFormulario);
+//     filaHojaLiquidacion.push(montoALiquidar.monto);
+//     totalColumna5o8 += montoALiquidar.monto;
+//   } else {
+//     let colIndex = 4;
+//     mesesPeriodo.forEach(mes => {
+//       const { monto, diferencia, resolucion } = obtenerMontoYdiferencia(mes.nombre, tipoBeca, hojaFormulario);
+//       if (monto) {
+//         hojaActiva.insertColumnBefore(colIndex);
+//         hojaActiva.getRange(3, colIndex).setValue(`Monto Actualizado (${mes.nombre}) por (${resolucion})`);
+//         filaHojaLiquidacion.push(monto);
+//         hojaActiva.insertColumnBefore(colIndex + 1);
+//         hojaActiva.getRange(3, colIndex + 1).setValue(`Diferencia Monto (${mes.nombre})`);
+//         filaHojaLiquidacion.push(diferencia);
+//         totalColumna5o8 += monto;
+//         totalColumna6o9 += diferencia;
+//         colIndex += 2;
+//       }
+//     });
+//     filaHojaLiquidacion.push(totalColumna5o8 + totalColumna6o9); // Total
+//   }
+//   return { fila: filaHojaLiquidacion, totalColumna5o8, totalColumna6o9, totalColumna7o10 };
+// }
+
+// function obtenerMontoYdiferencia(mes, tipoBeca, hojaFormulario) {
+//   const montos = hojaFormulario.getRange("H4:O8").getValues();
+//   const resoluciones = hojaFormulario.getRange("H9:O9").getValues()[0];
+//   const columnasMes = hojaFormulario.getRange("H3:O3").getValues()[0];
+//   const filasBeca = hojaFormulario.getRange("G4:G8").getValues();
+
+//   // Buscar el índice del mes
+//   const mesIndex = columnasMes.findIndex(col => col.toLowerCase() === mes.toLowerCase());
+
+//   if (mesIndex !== -1) {
+//     // Buscar el índice de la fila correspondiente al tipo de beca
+//     const becaIndex = filasBeca.findIndex(fila => fila[0].toLowerCase() === tipoBeca.toLowerCase());
+
+//     if (becaIndex !== -1) {
+//       const monto = montos[becaIndex][mesIndex];
+//       const diferencia = monto - (montos[becaIndex][mesIndex - 1] || 0); // Diferencia con mes anterior
+//       return { monto, diferencia, resolucion: resoluciones[mesIndex] };
+//     }
+//   }
+//   return { monto: 0, diferencia: 0, resolucion: "" };
+// }
+
+
+
+// function obtenerMesRetroactivo() { 
+//   const ui = SpreadsheetApp.getUi(); 
+//   const respuesta = ui.prompt("¿A partir de qué mes corresponde el aumento? (Formato: aaaa-mm-dd)").getResponseText(); 
+//   // Verificar si la fecha es válida en el formato aaaa-mm-dd 
+//   if (!/^\d{4}-\d{2}-\d{2}$/.test(respuesta)) { 
+//       ui.alert("La entrada no es una fecha válida. Por favor, ingrese la fecha en el formato aaaa-mm-dd."); 
+//       return null; 
+//   } 
+//   // Convertir la fecha manualmente para evitar problemas de zona horaria 
+//   const [year, month, day] = respuesta.split('-').map(Number); 
+//   const fechaRetroactiva = new Date(Date.UTC(year, month - 1, day)); 
+//   //Logger.log(`Corresponde al mes retroactivo: ${fechaRetroactiva.toISOString().split('T')[0]}`); 
+//   return fechaRetroactiva; 
+// }
+
+
+// function agregarFilaAVencimientos(hoja, fila, row, programa, idPersona, ids) { 
+//   fila[2] = row[2]; 
+//   fila[3] = row[3]; 
+//   fila[4] = row[4]; 
+//   fila[5] = programa; 
+//   hoja.appendRow(fila); 
+//   ids.add(idPersona); 
+// }
+
+
+// function agregarFilaTotales(hoja, totalColumna5o8, totalColumna6o9, totalColumna7o10, respuesta) {
+//   const ultimaFila = hoja.getLastRow() + 1;
+//   hoja.getRange(ultimaFila, 1).setValue("TOTAL");
+//   hoja.getRange(ultimaFila, 1).setFontWeight("bold").setFontSize(11);
+
+//   if (respuesta === "no") {
+//     hoja.getRange(ultimaFila, 1, 1, 5).mergeAcross();
+//     hoja.getRange(ultimaFila, 6).setValue(totalColumna5o8);
+//     hoja.getRange(ultimaFila, 7).setValue(totalColumna6o9);
+//     hoja.getRange(ultimaFila, 8).setValue(totalColumna7o10);
+//     hoja.getRange(ultimaFila, 6).setFontWeight("bold").setFontSize(11);
+//     hoja.getRange(ultimaFila, 7).setFontWeight("bold").setFontSize(11);
+//     hoja.getRange(ultimaFila, 8).setFontWeight("bold").setFontSize(11);
+//   } else if (respuesta === "yes") {
+//     hoja.getRange(ultimaFila, 1, 1, 8).mergeAcross();
+//     hoja.getRange(ultimaFila, 9).setValue(totalColumna5o8);
+//     hoja.getRange(ultimaFila, 10).setValue(totalColumna6o9);
+//     hoja.getRange(ultimaFila, 11).setValue(totalColumna7o10);
+//     hoja.getRange(ultimaFila, 9).setFontWeight("bold").setFontSize(11);
+//     hoja.getRange(ultimaFila, 10).setFontWeight("bold").setFontSize(11);
+//     hoja.getRange(ultimaFila, 11).setFontWeight("bold").setFontSize(11);
+//   }
+// }
+
+// function agregarDatosIoma(ss, programa, totalColumna5o8, totalColumna6o9, totalColumna7o10) {
+//   const hojaIoma = ss.getSheetByName("IOMA " + programa);
+//   const numberFormat = '[$$]#,##0.00';
+//   hojaIoma.getRange(4, 2).setValue(totalColumna7o10).setNumberFormat(numberFormat).setFontWeight("bold");
+//   hojaIoma.getRange(4, 3).setValue(totalColumna6o9).setNumberFormat(numberFormat);
+//   hojaIoma.getRange(4, 4).setValue(totalColumna6o9).setNumberFormat(numberFormat);
+//   hojaIoma.getRange(4, 5).setValue(totalColumna6o9 + totalColumna5o8).setNumberFormat(numberFormat).setFontWeight("bold");
+// }
+
+// function eliminarFila(hoja, idUnicoPersona) {
+//   const data = hoja.getDataRange().getValues();
+//   for (let i = 0; i < data.length; i++) {
+//     const id = data[i][1] + "-" + data[i][2];
+//     if (id === idUnicoPersona) {
+//       hoja.deleteRow(i + 1);
+//       break;
+//     }
+//   }
+// }
+
+// function obtenerMesReferencia(fecha) {
+//   const dia = fecha.getDate();
+//   const mes = fecha.getMonth();
+//   const anio = fecha.getFullYear();
+
+//   if (dia >= 15) {
+//     return new Date(anio, mes, 15);
+//   } else {
+//     return new Date(anio, mes - 1, 15);
+//   }
+// }
+
+// function incorporarColumnasRetroactivos(hojaActiva ,hojaPrograma) {
+//   const hayRetroactivos = Browser.msgBox("¿Hay retroactivos a calcular?", Browser.Buttons.YES_NO);
+//   hojaActiva.getRange("A4:M" + hojaPrograma.getLastRow()).clearContent();
+
+//   if (hayRetroactivos === "yes") {
+//     const respuesta1 = Browser.msgBox("¿Debo agregar columnas?",Browser.Buttons.YES_NO);
+//     if (respuesta1 === "yes") {
+//       agregarColumnasRetroactivas(hojaActiva);
+//     }
+//     const columnasOrigen = [0, 1, 3, 4, 5];
+//     return {columnasOrigen: columnasOrigen, respuesta: "yes"}
+//   } else if (hayRetroactivos === "no") {
+//     const respuesta2 = Browser.msgBox("¿Debo eliminar columnas?", Browser.Buttons.YES_NO);
+//     if (respuesta2 === "yes") {
+//       eliminarColumnas(hojaActiva, [5, 7, 8]);
+//     }
+//     hojaActiva.getRange("E3").setValue("Monto");
+//     hojaActiva.getRange("A4:L" + hojaPrograma.getLastRow()).clearContent();
+//     const columnasOrigen = [0, 1, 3, 4, 5];
+//     return {columnasOrigen: columnasOrigen, respuesta: "no"}
+//   } else {
+//     Browser.msgBox("Respuesta no válida. Por favor, ingrese 'Si' o 'No'.");
+//   }
+// }
+
+// function agregarColumnasRetroactivas(hoja) {
+//   hoja.insertColumnBefore(5);
+//   hoja.getRange("E3").setValue("Monto de la beca Anterior");
+//   hoja.insertColumnBefore(7);
+//   hoja.getRange("F3").setValue("Monto Actualizado por");
+//   hoja.insertColumnBefore(8);
+//   hoja.getRange("G3").setValue("Diferencia incremento");
+//   hoja.getRange("H3").setValue("Incremento Diferencial Retroactivo");
+// }
+
+// function eliminarColumnas(hoja, columnas) {
+//   for (let i = columnas.length - 1; i >= 0; i--) {
+//     try {
+//       hoja.deleteColumn(columnas[i]);
+//     } catch (e) {
+//       // Logger.log("La columna " + columnas[i] + " no existe.");
+//     }
+//   }
+// }
+
+// function buscarValorBecaAnterior(tipoBeca, hojaFormulario) {
+//   const rangoTipos = hojaFormulario.getRange("G13:G17").getValues().flat();
+//   const rangoDatos = hojaFormulario.getRange("I13:I17").getValues().flat();
+//   const index = rangoTipos.findIndex(tipo => tipo.trim() === tipoBeca);
+//   return index !== -1 ? rangoDatos[index] : "Tipo de beca no encontrado";
+// }
+
+// function convertirFecha(fechaTexto) {
+//   const partes = fechaTexto.split('/');
+//   if (partes.length === 3) {
+//     const [dia, mes, anio] = partes.map(Number);
+//     return new Date(anio, mes - 1, dia);
+//   }
+//   return new Date(fechaTexto);
+// }
+
+// function separarFechasPeriodo(filaCertificacion) {
+//   const periodo = filaCertificacion[9];
+//   const fechas = periodo.split(' al ');
+//   if (fechas.length < 2) {
+//     return 0;
+//   }
+//   const fechaInicio = convertirFecha(fechas[0].trim());
+//   const fechaFin = convertirFecha(fechas[1].trim());
+
+//   if (isNaN(fechaInicio) || isNaN(fechaFin)) {
+//     return 0;
+//   }
+//   return { inicio: fechaInicio, fin: fechaFin }
+// }
+
+// function fechaMayor(fecha1, fecha2) {
+//   let date1 = new Date(fecha1);
+//   let date2 = new Date(fecha2);
+
+//   if (isNaN(date2.getTime())) {
+//     const [dia2, mes2, año2] = fecha2.split('/').map(Number);
+//     date2 = new Date(año2, mes2 - 1, dia2);
+//   }
+
+//   if (isNaN(date1.getTime()) || isNaN(date2.getTime())) {
+//     throw new Error("Una o ambas fechas no son válidas.");
+//   }
+
+//   return date1 >= date2 ? fecha1 : fecha2;
+// }
+// function calcularRetroactivoCompleto(filaCertificacion, dato, diferencia, hojaFormulario) {
+//   const fecha = separarFechasPeriodo(filaCertificacion);
+//   let diasHabiles;
+//   let montoMensual = 0;
+//   let montoTotal = 0;
+//   let detallesCalculo = "";
+//   let resultado = fechaMayor(dato, filaCertificacion[3]);
+//   const mesRetroactivo = obtenerMesesEntreFechas(resultado, fecha.inicio);
+
+//   mesRetroactivo.forEach(mesR => {
+//     if (mesR.fin < fecha.inicio) {
+//       diasHabiles = calcularDiasHabiles(mesR.inicio, mesR.fin);
+//       if (diasHabiles > 0) {
+//         montoMensual = (diferencia / 24) * diasHabiles;
+//         montoTotal += montoMensual;
+//         detallesCalculo += `${mesR.nombre}: ${montoMensual.toFixed(2)} (días hábiles: ${diasHabiles})\n`;
+//       }
+//     }
+//   });
+
+//   const meses = obtenerMesesEntreFechas(fecha.inicio, fecha.fin);
+//   meses.forEach(mes => {
+//     diasHabiles = calcularDiasHabiles(mes.inicio, mes.fin);
+//     if (diasHabiles > 0) {
+//       const tipoBeca = filaCertificacion[4];
+//       montoMensual = obtenerMontoMensual(hojaFormulario, tipoBeca, mes.nombre);
+//       const montoMensualCalculado = (montoMensual / 24) * diasHabiles;
+//       montoTotal += montoMensualCalculado;
+//       detallesCalculo += `${mes.nombre}: ${montoMensualCalculado.toFixed(2)} (días hábiles: ${diasHabiles})\n`;
+//     }
+//   });
+
+//   return { monto: montoTotal, detalles: detallesCalculo };
+// }
+
+// function calcularMontoSinRetroactivo(filaCertificacion, dato) {
+//   const fecha = separarFechasPeriodo(filaCertificacion);
+//   let diasHabiles;
+//   let montoMensual = 0;
+//   let montoTotal = 0;
+//   let detallesCalculo = "";
+//   const meses = obtenerMesesEntreFechas(fecha.inicio, fecha.fin);
+
+//   meses.forEach(mes => {
+//     diasHabiles = calcularDiasHabiles(mes.inicio, mes.fin);
+//     const tipoBeca = filaCertificacion[4];
+//     montoMensual = obtenerMontoMensual(dato, tipoBeca, mes.nombre);
+//     const montoMensualCalculado = (montoMensual / 24) * diasHabiles;
+//     montoTotal += montoMensualCalculado;
+//     detallesCalculo += `${mes.nombre}: ${montoMensualCalculado.toFixed(2)} (días hábiles: ${diasHabiles})\n`;
+//   });
+
+//   return { monto: montoTotal, detalles: detallesCalculo };
+// }
+
+// function calcularMontoRetroactivoSoloPeriodo(filaCertificacion, dato, diferencia) {
+//   const fecha = separarFechasPeriodo(filaCertificacion);
+//   let diasHabiles;
+//   let montoMensual = 0;
+//   let montoTotal = 0;
+//   let detallesCalculo = "";
+//   const meses = obtenerMesesEntreFechas(fecha.inicio, fecha.fin);
+
+//   meses.forEach(mes => {
+//     diasHabiles = calcularDiasHabiles(mes.inicio, mes.fin);
+//     montoMensual = diferencia;
+//     const montoMensualCalculado = (montoMensual / 24) * diasHabiles;
+//     montoTotal += montoMensualCalculado;
+//     detallesCalculo += `${mes.nombre}: ${montoMensualCalculado.toFixed(2)} (días hábiles: ${diasHabiles})\n`;
+//   });
+
+//   return { monto: montoTotal, detalles: detallesCalculo };
+// }
+
+// function obtenerMesesEntreFechas(fechaInicio, fechaFin) {
+//   Logger.log("Iniciando obtenerMesesEntreFechas...");
+//   Logger.log("Fecha de inicio: " + fechaInicio);
+//   Logger.log("Fecha de fin: " + fechaFin);
+
+//   const meses = [];
+//   let fechaActual = new Date(fechaInicio);
+
+//   while (fechaActual <= fechaFin) {
+//     Logger.log("Procesando mes: " + fechaActual);
+    
+//     let inicioMes = new Date(fechaActual.getFullYear(), fechaActual.getMonth(), 1);
+//     let finMes = new Date(fechaActual.getFullYear(), fechaActual.getMonth() + 1, 0);
+
+//     if (inicioMes < fechaInicio) {
+//       inicioMes = new Date(fechaInicio);
+//       Logger.log("Ajustando inicioMes: " + inicioMes);
+//     }
+//     if (finMes > fechaFin) {
+//       finMes = new Date(fechaFin);
+//       Logger.log("Ajustando finMes: " + finMes);
+//     }
+
+//     const nombreMes = obtenerNombreMes(fechaActual.getMonth());
+//     Logger.log("Mes agregado: " + nombreMes + ", desde: " + inicioMes + " hasta: " + finMes);
+    
+//     meses.push({ inicio: inicioMes, fin: finMes, nombre: nombreMes });
+
+//     fechaActual.setMonth(fechaActual.getMonth() + 1);
+//     fechaActual.setDate(1);
+//   }
+
+//   Logger.log("Meses obtenidos: " + JSON.stringify(meses));
+//   return meses;
+// }
+
+
+// function obtenerNombreMes(mes) {
+//   const nombresMeses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+//   return nombresMeses[mes];
+// }
+
+// function calcularDiasHabiles(fechaInicio, fechaFin) {
+//   let diasHabiles = 0;
+//   const fechaActual = new Date(fechaInicio);
+
+//   while (fechaActual <= fechaFin) {
+//     const diaSemana = fechaActual.getDay();
+//     if (diaSemana >= 1 && diaSemana <= 6) {
+//       diasHabiles++;
+//     }
+//     fechaActual.setDate(fechaActual.getDate() + 1);
+//   }
+//   return Math.min(diasHabiles, 24);
+// }
+
+// function obtenerMontoMensual(hojaFormulario, tipoBeca, mes) {
+//   const datosFormulario = hojaFormulario.getDataRange().getValues();
+//   const monthNames = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+//   const mesIndex = monthNames.indexOf(mes.toLowerCase());
+
+//   if (mesIndex === -1) {
+//     return 0;
+//   }
+
+//   for (let i = 3; i < 8; i++) {
+//     const tipoBecaActual = datosFormulario[i][6];
+//     if (tipoBecaActual && tipoBecaActual.toLowerCase() === tipoBeca.toLowerCase()) {
+//       for (let j = mesIndex; j >= 0; j--) {
+//         const mesActual = monthNames[j];
+//         for (let k = 7; k <= 14; k++) {
+//           const mesCelda = datosFormulario[2][k];
+//           if (mesCelda && mesCelda.toLowerCase() === mesActual) {
+//             return datosFormulario[i][k];
+//           }
+//         }
+//       }
+//       for (let j = 14; j >= 7; j--) {
+//         if (j == mesIndex) continue;
+//         const mesAnterior = monthNames[j];
+//         for (let k = 7; k <= 14; k++) {
+//           const mesCelda = datosFormulario[2][k];
+//           if (mesCelda && mesCelda.toLowerCase() === mesAnterior) {
+//             return datosFormulario[i][k];
+//           }
+//         }
+//       }
+//     }
+//   }
+//   return 0;
+// }
+
+// function identificarPrograma(titulo) {
+//   const programas = {
+//     "fortalecimiento": "Fortalecimiento",
+//     "operadores de calle": "Operadores de Calle",
+//     "autonomia joven": "Autonomia Joven"
+//   };
+//   for (const key in programas) {
+//     if (titulo.includes(key)) {
+//       return programas[key];
+//     }
+//   }
+//   return "Programa no identificado";
+// }
+
+// function buscarValoresBeca(tipoBeca, hojaFormulario) {
+//   const rangoTipos = hojaFormulario.getRange("G4:G8").getValues().flat();
+//   const rangoValoresAnteriores = hojaFormulario.getRange("I4:O8").getValues().flat();
+//   const rangoValoresActuales = hojaFormulario.getRange("H4:H8").getValues().flat();
+//   const index = rangoTipos.findIndex(tipo => tipo.trim() === tipoBeca);
+//   if (index !== -1) {
+//     return { montoAnterior: rangoValoresAnteriores[index], montoActual: rangoValoresActuales[index] };
+//   }
+//   return { montoAnterior: "Tipo de beca no encontrado", montoActual: "Tipo de beca no encontrado" };
+// }

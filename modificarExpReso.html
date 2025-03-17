@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <base target="_top">
+  <style>
+    /* Estilos CSS */
+
+    body {
+      background-color: #25A18E;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: start;
+      gap: 15px;
+    }
+
+    ul {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: start;
+      gap: 15px;
+    }
+
+    li {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 10px 2px;
+      gap: 3px;
+      background-color: #9FFFCB;
+    }
+
+    form {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: start;
+      gap: 9px;
+      padding: 8px 3px;
+      background-color: #7AE582;
+      width: 270px;
+    }
+
+    form div {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: start;
+      gap: 4px;
+    }
+
+    form div label:hover {
+      text-decoration: underline;
+    }
+
+    input {
+      padding: 2px;
+      width: 230px;
+    }
+
+    button:hover {
+      cursor: pointer;
+    }
+  </style>
+</head>
+
+<body>
+  <form id="formularioBusqueda" onsubmit="buscarResolucionCliente(event)">
+    <div>
+      <label for="buscarReso">Buscar (Expediente/Resolución):</label>
+      <input type="text" id="buscarReso" required>
+    </div>
+    <button type="submit">Buscar</button>
+  </form>
+  <ul id="listaEmpleados"></ul>
+  <form id="formularioModificacion" onsubmit="modificarRegistrosCliente(event)">
+    <div>
+      <label for="nuevoValor">Nuevo valor (Expediente/Resolución):</label>
+      <input type="text" id="nuevoValor" required>
+    </div>
+    <button type="submit">Modificar</button>
+  </form>
+
+  <script src="https://apis.google.com/js/api.js" onload="onApiLoad()"></script>
+  <script>
+    let empleados = []; // Variable global para almacenar los empleados
+
+    function onApiLoad() {
+      console.log("API de Apps Script cargada.");
+    }
+
+    function buscarResolucionCliente(event) {
+      event.preventDefault();
+      const valorBusqueda = document.getElementById('buscarReso').value;
+      google.script.run
+        .withSuccessHandler(renderEmpleadosCliente)
+        .buscarResolucion(valorBusqueda);
+    }
+
+    function renderEmpleadosCliente(empleadosRecibidos) {
+      empleados = empleadosRecibidos; // Guarda los empleados en la variable global
+      const lista = document.getElementById('listaEmpleados');
+      lista.innerHTML = ''; // Limpia la lista antes de añadir nuevos elementos
+
+      if (empleados && empleados.length > 0) {
+        empleados.forEach((empleado, index) => {
+          const li = document.createElement('li');
+          li.innerHTML = `
+            <input type="checkbox" id="empleado${index}" value="${empleado.resolucion}" data-es-expediente="${empleado.esExpediente}">
+            <label for="empleado${index}">
+              <p>${empleado.nombre}, ${empleado.apellido}</p>
+              <p>${empleado.resolucion}</p>
+              <p>${empleado.hoja}</p>
+            </label>
+          `;
+          lista.appendChild(li);
+        });
+      } else {
+        const li = document.createElement('li');
+        li.textContent = 'No se encontraron registros.';
+        lista.appendChild(li);
+      }
+    }
+
+    function modificarRegistrosCliente(event) {
+      event.preventDefault();
+      const nuevoValor = document.getElementById('nuevoValor').value;
+      const checkboxes = document.querySelectorAll('input[type="checkbox"]:checked');
+
+      const registrosSeleccionados = Array.from(checkboxes).map(checkbox => {
+        const empleado = empleados.find(e => e.resolucion === checkbox.value); // Encuentra el empleado correspondiente al checkbox
+        if (empleado) {
+          return empleado; // Devuelve el objeto empleado completo
+        } else {
+          console.warn("No se encontró el empleado para el checkbox:", checkbox.value);
+          return null;
+        }
+      }).filter(item => item !== null);
+
+      console.log("Registros seleccionados:", registrosSeleccionados);
+
+      google.script.run
+        .withSuccessHandler(function(mensaje) {
+          console.log(mensaje);
+          google.script.host.close();
+        })
+        .withFailureHandler(function(error) {
+          console.error(error);
+          alert("Error al modificar registros: " + error.message);
+        })
+        .modificarRegistrosSeleccionados(registrosSeleccionados, nuevoValor);
+    }
+  </script>
+</body>
+
+</html>
